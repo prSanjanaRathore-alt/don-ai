@@ -19,6 +19,15 @@ CREATE TABLE IF NOT EXISTS goals (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS goal_plans (
+  id TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  plan JSONB NOT NULL CHECK (jsonb_typeof(plan) = 'object'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, id)
+);
+
 CREATE TABLE IF NOT EXISTS milestones (
   id UUID PRIMARY KEY,
   goal_id UUID NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
@@ -68,6 +77,7 @@ CREATE TABLE IF NOT EXISTS memories (
 );
 
 CREATE INDEX IF NOT EXISTS idx_goals_user_id ON goals(user_id);
+CREATE INDEX IF NOT EXISTS idx_goal_plans_user_updated ON goal_plans(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_milestones_goal_id ON milestones(goal_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_milestone_id ON tasks(milestone_id);
 CREATE INDEX IF NOT EXISTS idx_progress_user_goal ON progress_events(user_id, goal_id);
@@ -75,6 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_user_key ON memories(user_id, key);
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE goals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE goal_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE milestones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE progress_events ENABLE ROW LEVEL SECURITY;
@@ -86,3 +97,7 @@ CREATE POLICY "Users can manage their own milestones" ON milestones FOR ALL USIN
 CREATE POLICY "Users can manage their own tasks" ON tasks FOR ALL USING (EXISTS (SELECT 1 FROM milestones m JOIN goals g ON g.id = m.goal_id WHERE m.id = milestone_id AND g.user_id = auth.uid())) WITH CHECK (EXISTS (SELECT 1 FROM milestones m JOIN goals g ON g.id = m.goal_id WHERE m.id = milestone_id AND g.user_id = auth.uid()));
 CREATE POLICY "Users can manage their own progress" ON progress_events FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can manage their own memories" ON memories FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can manage their own goal plans" ON goal_plans;
+CREATE POLICY "Users can manage their own goal plans" ON goal_plans
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

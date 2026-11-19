@@ -1,5 +1,11 @@
 import { Goal, Milestone, Task } from './types';
 
+export interface CurrentMission {
+  task: Task;
+  milestone: Milestone;
+  nextTask: Task | null;
+}
+
 const addDays = (days: number) => {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -19,6 +25,30 @@ const createTask = (title: string, objective: string, why: string, timeEstimate:
   verificationMode,
   status: 'todo',
 });
+
+export function getCurrentMission(goal: Goal | null): CurrentMission | null {
+  if (!goal) return null;
+
+  const plannedTasks = goal.milestones.flatMap((milestone) =>
+    milestone.tasks.map((task) => ({ task, milestone })),
+  );
+  const activeIndex = plannedTasks.findIndex(({ task }) => task.status === 'in_progress');
+  const missionIndex = activeIndex >= 0
+    ? activeIndex
+    : plannedTasks.findIndex(({ task }) => task.status !== 'done');
+
+  if (missionIndex < 0) return null;
+
+  const mission = plannedTasks[missionIndex];
+  const remainingTasks = plannedTasks.filter(
+    ({ task }, index) => index !== missionIndex && task.status !== 'done',
+  );
+  const nextTask = remainingTasks.find(({ task }) => task.status === 'in_progress')?.task
+    ?? remainingTasks[0]?.task
+    ?? null;
+
+  return { ...mission, nextTask };
+}
 
 export function generateGoalPlan(userGoal: string): Goal {
   const trimmed = userGoal.trim();
