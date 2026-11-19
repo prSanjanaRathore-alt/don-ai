@@ -1,73 +1,46 @@
 # DON AI
 
-DON AI is a premium personal goal achievement engine that helps users turn meaningful goals into measurable action.
-
-## What is included in this MVP
-
-- Premium, responsive mobile-first layout
-- Goal creation flow and roadmap generation
-- Today's Mission recommendation
-- Goal, milestone, and task workspace structure
-- AI Coach API route with explicit provider configuration state
-- Local persistence for MVP
-- Supabase-ready configuration and schema
-- Starter test coverage for the planning logic
+DON AI helps users turn personal goals into measurable missions, track progress, and get context-aware coaching.
 
 ## Local development
 
-### 1. Install dependencies
+Use Node.js 22 or newer.
 
 ```bash
 npm install
-```
-
-### 2. Start the app
-
-```bash
 npm run dev
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000. Run `npm test`, `npm run lint`, and `npm run build` to validate changes.
 
-### 3. Run tests
+## Configuration
 
-```bash
-npm test
-```
-
-## Environment variables
-
-Create a `.env.local` file with the following variables:
+Create `.env.local` with server-side values. Do not prefix provider keys with `NEXT_PUBLIC_`.
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
+SITE_URL=http://localhost:3000
 AI_PROVIDER=openai
-OPENAI_API_KEY=your-openai-key
+OPENAI_API_KEY=your-provider-key
 ```
 
-You may use `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` instead of `OPENAI_API_KEY`.
+For the coach, choose `openai`, `anthropic`, or `gemini` and provide its matching server-side key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`). Optional model overrides are `OPENAI_MODEL`, `ANTHROPIC_MODEL`, and `GEMINI_MODEL`. Provider credentials are only used by server routes and never returned to the browser. Without a configured provider key, the coach shows a configuration error rather than a simulated response.
+
+Without Supabase configuration, users can continue in local-only mode; goals remain in that browser and are not synced. Supabase is required for account authentication, cloud goal persistence, and the AI coach.
 
 ## Supabase setup
 
-1. Create a Supabase project.
-2. Open SQL editor and run the schema from `supabase/schema.sql`.
-3. Copy the Project URL and anon key into `.env.local`.
-4. Enable row-level security and authentication in Supabase.
+1. Create a Supabase project and configure email/password authentication.
+2. Run `supabase/schema.sql` in the project SQL editor to create the goal-plan table and row-level security policy.
+3. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SITE_URL` in the app environment.
+4. Add `${SITE_URL}/api/auth/callback` to the Supabase Auth redirect URL allowlist.
+
+The app uses the anon key with verified user sessions and row-level security; it does not use a service-role key. Existing local goals can be imported after signing in.
 
 ## Project structure
 
-- `app/` — Next.js app routes and UI
-- `lib/` — planning logic and configuration
-- `supabase/` — database schema
+- `app/` — Next.js UI and server API routes
+- `lib/` — planning, validation, authentication, and AI-provider logic
+- `supabase/schema.sql` — database schema and row-level security
 - `__tests__/` — unit tests
-
-## Known limits for this starter build
-
-- Local browser storage is used for persistence until Supabase is configured.
-- Real AI provider calls are intentionally gated behind environment variables to avoid leaking secrets.
-- This is a production-ready foundation, not a complete multi-user SaaS with billing.
-
-## Deployment
-
-This project is ready to deploy to Vercel with environment variables configured.

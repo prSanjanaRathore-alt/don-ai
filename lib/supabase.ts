@@ -1,20 +1,38 @@
-import { createClient } from '@supabase/supabase-js';
+import 'server-only';
 
-export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-export const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { Database } from './database.types';
 
-export const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+export function getSupabaseConfig() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export function getSupabaseStatus() {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return {
-      configured: false,
-      message: 'Supabase is not configured yet. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to continue with persistent storage.',
-    };
+  return { url, anonKey, configured: Boolean(url && anonKey) };
+}
+
+export async function createSupabaseServerClient() {
+  const { url, anonKey, configured } = getSupabaseConfig();
+  if (!configured) {
+    throw new Error('Supabase is not configured.');
   }
 
-  return {
-    configured: true,
-    message: 'Supabase configuration detected.',
-  };
+  const cookieStore = await cookies();
+
+  return createServerClient<Database>(url, anonKey, {
+    cookies: {
+      getAll: () => cookieStore.getAll(),
+      setAll: (cookiesToSet) => {
+        for (const { name, value, options } of cookiesToSet) {
+          cookieStore.set(name, value, {
+            ...options,
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+            path: '/',
+          });
+        }
+      },
+    },
+  });
 }

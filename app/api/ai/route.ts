@@ -1,47 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuthenticatedUser } from '@/lib/auth';
+import { AiProviderError, getAiProviderConfig, requestCoachReply } from '@/lib/ai';
 
 export async function POST(request: NextRequest) {
+  const providerResult = getAiProviderConfig();
+  if (!providerResult.ok) {
+    return NextResponse.json({ error: providerResult.error }, { status: 503 });
+  }
+
+  const auth = await requireAuthenticatedUser(request);
+  if (!auth.ok) return auth.response;
+
+  let body: { message?: unknown; goal?: unknown; task?: unknown };
   try {
-    const body = await request.json();
-    const message = String(body?.message || '').trim();
-    const goal = String(body?.goal || '').trim();
-    const task = String(body?.task || '').trim();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Send a valid JSON request.' }, { status: 400 });
+  }
 
-    if (!message && !goal && !task) {
-      return NextResponse.json({ error: 'At least one message context is required.' }, { status: 400 });
-    }
+  const message = typeof body.message === 'string' ? body.message.trim() : '';
+  const goal = typeof body.goal === 'string' ? body.goal.trim() : '';
+  const task = typeof body.task === 'string' ? body.task.trim() : '';
 
-    const provider = process.env.AI_PROVIDER || 'not-configured';
+  if (!message && !goal && !task) {
+    return NextResponse.json({ error: 'At least one message or goal context is required.' }, { status: 400 });
+  }
+  if (message.length > 4_000 || goal.length > 10_000 || task.length > 2_000) {
+    return NextResponse.json({ error: 'The coach request is too long.' }, { status: 413 });
+  }
 
-    if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY && !process.env.GEMINI_API_KEY) {
-      return NextResponse.json({
-        ok: true,
-        coach: {
-          role: 'AI Coach',
-          provider,
-          status: 'provider-missing',
-          message: 'AI is configured but no provider key is active yet. Connect one of OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY to enable live model responses.',
-          context: {
-            goal: goal || 'Not set yet',
-            task: task || 'No task selected',
-          },
-        },
-      });
-    }
+  const prompt = [
+    goal ? `User goal: ${goal}` : '',
+    task ? `Current mission: ${task}` : '',
+    message ? `User request: ${message}` : '',
+  ].filter(Boolean).join('\n\n');
 
+  try {
+    const reply = await requestCoachReply(providerResult.config, prompt);
     return NextResponse.json({
       ok: true,
-      coach: {
-        role: 'AI Coach',
-        provider,
-        status: 'provider-configured',
-        message: `I understand your goal and task context. Based on the current plan, the best next step is to stay focused on the highest-value action and capture evidence before changing direction.`,
-      },
+      coach: { role: 'AI Coach', provider: providerResult.config.provider, message: reply },
     });
   } catch (error) {
-    return NextResponse.json({
-      error: 'Unable to reach the AI provider right now.',
-      details: error instanceof Error ? error.message : 'Unknown error',
-    }, { status: 500 });
+    const message = error instanceof AiProviderError
+      ? error.message
+      : 'The AI provider could not respond. Verify its server-side configuration and try again.';
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }
